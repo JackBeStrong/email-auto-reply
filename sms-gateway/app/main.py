@@ -233,7 +233,7 @@ async def incoming_sms_webhook(
     - Validates timestamp to prevent replay attacks (±5 minutes)
     """
     # Verify webhook signature if signing key is configured
-    if settings.webhook_signing_key:
+    if settings.sms_gateway_webhook_signing_key:
         if not x_signature or not x_timestamp:
             logger.warning("Webhook missing signature headers")
             raise HTTPException(
@@ -253,7 +253,7 @@ async def incoming_sms_webhook(
         payload = body.decode('utf-8')
         
         # Verify signature
-        if not verify_webhook_signature(payload, x_timestamp, x_signature, settings.webhook_signing_key):
+        if not verify_webhook_signature(payload, x_timestamp, x_signature, settings.sms_gateway_webhook_signing_key):
             raise HTTPException(
                 status_code=401,
                 detail="Invalid webhook signature"
