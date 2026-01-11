@@ -35,12 +35,35 @@ class SendSMSResponse(BaseModel):
     error: Optional[str] = None
 
 
-class IncomingSMSWebhook(BaseModel):
-    """Webhook payload for incoming SMS from Android gateway."""
-    from_number: str = Field(..., alias="from", description="Sender phone number")
+class WebhookPayload(BaseModel):
+    """Nested payload within webhook from Android SMS Gateway app."""
+    messageId: str = Field(..., description="Message ID")
     message: str = Field(..., description="SMS message content")
-    timestamp: Optional[datetime] = Field(default=None, description="Message timestamp")
-    device_id: Optional[str] = Field(default=None, description="Android device identifier")
+    phoneNumber: str = Field(..., description="Sender phone number")
+    simNumber: Optional[int] = Field(default=None, description="SIM card number")
+    receivedAt: str = Field(..., description="Timestamp when message was received")
+
+
+class IncomingSMSWebhook(BaseModel):
+    """Webhook payload for incoming SMS from Android gateway.
+    
+    Based on Android SMS Gateway webhook format:
+    https://capcom6.github.io/android-sms-gateway/features/webhooks/
+    
+    Example:
+    {
+      "event": "sms:received",
+      "payload": {
+        "messageId": "msg_12345abcde",
+        "message": "Received SMS text",
+        "phoneNumber": "+19162255887",
+        "simNumber": 1,
+        "receivedAt": "2024-06-07T11:41:31.000+07:00"
+      }
+    }
+    """
+    event: str = Field(..., description="Event type (e.g., sms:received)")
+    payload: WebhookPayload = Field(..., description="SMS message payload")
 
     model_config = ConfigDict(populate_by_name=True)
 

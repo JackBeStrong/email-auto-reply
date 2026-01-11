@@ -1,13 +1,16 @@
 """FastAPI SMS Gateway service."""
 
+import hashlib
+import hmac
 import logging
+import time
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Optional
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -21,6 +24,7 @@ class Settings(BaseSettings):
     sms_gateway_username: str = ""
     sms_gateway_password: str = ""
     your_phone_number: str = ""
+    sms_gateway_webhook_signing_key: str = ""  # Optional: HMAC signing key from Android app
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -52,6 +56,72 @@ message_store: list[SMSMessage] = []
 sms_client: Optional[SMSGatewayClient] = None
 
 
+def verify_webhook_signature(payload: str, timestamp: str, signature: str, secret_key: str) -> bool:
+    """
+    Verify HMAC-SHA256 signature from Android SMS Gateway webhook.
+    
+    Args:
+        payload: Raw request body as string
+        timestamp: Unix timestamp from X-Timestamp header
+        signature: HMAC signature from X-Signature header
+        secret_key: Signing key configured in Android app
+    
+    Returns:
+        True if signature is valid, False otherwise
+    """
+    if not secret_key:
+        logger.warning("No signing key configured, skipping signature verification")
+        return True  # Allow webhook if no key is configured
+    
+    try:
+        # Concatenate payload and timestamp
+        message = (payload + timestamp).encode()
+        
+        # Compute expected signature
+        expected_signature = hmac.new(
+            secret_key.encode(),
+            message,
+            hashlib.sha256
+        ).hexdigest()
+        
+        # Use constant-time comparison to prevent timing attacks
+        is_valid = hmac.compare_digest(expected_signature, signature)
+        
+        if not is_valid:
+            logger.warning(f"Invalid webhook signature. Expected: {expected_signature[:10]}..., Got: {signature[:10]}...")
+        
+        return is_valid
+    except Exception as e:
+        logger.error(f"Error verifying webhook signature: {e}")
+        return False
+
+
+def verify_webhook_timestamp(timestamp: str, max_age_seconds: int = 300) -> bool:
+    """
+    Verify webhook timestamp to prevent replay attacks.
+    
+    Args:
+        timestamp: Unix timestamp from X-Timestamp header
+        max_age_seconds: Maximum age of webhook in seconds (default: 5 minutes)
+    
+    Returns:
+        True if timestamp is within acceptable range, False otherwise
+    """
+    try:
+        webhook_time = int(timestamp)
+        current_time = int(time.time())
+        age = abs(current_time - webhook_time)
+        
+        if age > max_age_seconds:
+            logger.warning(f"Webhook timestamp too old: {age} seconds")
+            return False
+        
+        return True
+    except (ValueError, TypeError) as e:
+        logger.error(f"Invalid timestamp format: {e}")
+        return False
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
@@ -59,6 +129,11 @@ async def lifespan(app: FastAPI):
 
     if not settings.sms_gateway_username or not settings.sms_gateway_password:
         logger.warning("SMS_GATEWAY_USERNAME or SMS_GATEWAY_PASSWORD not set")
+    
+    if not settings.sms_gateway_webhook_signing_key:
+        logger.warning("SMS_GATEWAY_WEBHOOK_SIGNING_KEY not set - webhook signature verification disabled")
+    else:
+        logger.info("Webhook signature verification enabled")
 
     sms_client = SMSGatewayClient(
         settings.android_gateway_url,
@@ -141,24 +216,66 @@ async def send_sms(request: SendSMSRequest):
 
 
 @app.post("/sms/incoming")
-async def incoming_sms_webhook(webhook: IncomingSMSWebhook):
+async def incoming_sms_webhook(
+    request: Request,
+    webhook: IncomingSMSWebhook,
+    x_signature: Optional[str] = Header(None),
+    x_timestamp: Optional[str] = Header(None),
+):
     """
     Webhook endpoint to receive incoming SMS from Android gateway.
 
     The Android SMS gateway app should be configured to POST to this endpoint
     when a new SMS is received on the phone.
+    
+    Security:
+    - Verifies HMAC-SHA256 signature if WEBHOOK_SIGNING_KEY is configured
+    - Validates timestamp to prevent replay attacks (±5 minutes)
     """
-    logger.info(f"Received SMS from {webhook.from_number}: {webhook.message[:50]}...")
+    # Verify webhook signature if signing key is configured
+    if settings.webhook_signing_key:
+        if not x_signature or not x_timestamp:
+            logger.warning("Webhook missing signature headers")
+            raise HTTPException(
+                status_code=401,
+                detail="Missing X-Signature or X-Timestamp header"
+            )
+        
+        # Verify timestamp first (prevent replay attacks)
+        if not verify_webhook_timestamp(x_timestamp):
+            raise HTTPException(
+                status_code=401,
+                detail="Webhook timestamp invalid or too old"
+            )
+        
+        # Get raw request body for signature verification
+        body = await request.body()
+        payload = body.decode('utf-8')
+        
+        # Verify signature
+        if not verify_webhook_signature(payload, x_timestamp, x_signature, settings.webhook_signing_key):
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid webhook signature"
+            )
+        
+        logger.info("Webhook signature verified successfully")
+    
+    logger.info(f"Received SMS from {webhook.payload.phoneNumber}: {webhook.payload.message[:50]}...")
 
     # Store the incoming message
     stored_message = SMSMessage(
-        id=str(uuid.uuid4()),
+        id=webhook.payload.messageId,
         direction=MessageDirection.INCOMING,
-        phone_number=webhook.from_number,
-        message=webhook.message,
+        phone_number=webhook.payload.phoneNumber,
+        message=webhook.payload.message,
         status=MessageStatus.RECEIVED,
-        timestamp=webhook.timestamp or datetime.now(timezone.utc),
-        metadata={"device_id": webhook.device_id} if webhook.device_id else None,
+        timestamp=datetime.now(timezone.utc),  # Parse receivedAt if needed
+        metadata={
+            "sim_number": webhook.payload.simNumber,
+            "received_at": webhook.payload.receivedAt,
+            "event": webhook.event
+        },
     )
     message_store.append(stored_message)
 
