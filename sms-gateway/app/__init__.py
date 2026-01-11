@@ -1,0 +1,1 @@
+"""SMS Gateway service package."""
