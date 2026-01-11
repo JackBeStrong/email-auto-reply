@@ -3,6 +3,12 @@
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import AsyncMock, patch
+import os
+
+# Set test environment variables before importing app
+os.environ.setdefault("ANDROID_GATEWAY_URL", "http://localhost:8080")
+os.environ.setdefault("SMS_GATEWAY_USERNAME", "test")
+os.environ.setdefault("SMS_GATEWAY_PASSWORD", "test")
 
 from app.main import app, message_store
 from app.models import MessageDirection, MessageStatus

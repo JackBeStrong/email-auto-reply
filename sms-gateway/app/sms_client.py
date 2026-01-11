@@ -11,24 +11,33 @@ logger = logging.getLogger(__name__)
 
 
 class SMSGatewayClient:
-    """Client for Android SMS Gateway (e.g., CubeSystem SMS Gateway)."""
+    """Client for Android SMS Gateway (sms-gate.app)."""
 
-    def __init__(self, gateway_url: str, timeout: float = 30.0):
+    def __init__(
+        self,
+        gateway_url: str,
+        username: str,
+        password: str,
+        timeout: float = 30.0,
+    ):
         """
         Initialize SMS Gateway client.
 
         Args:
-            gateway_url: Base URL of the Android gateway (e.g., http://192.168.1.100:8080)
+            gateway_url: Base URL of the Android gateway (e.g., http://192.168.1.224:8080)
+            username: Basic auth username
+            password: Basic auth password
             timeout: Request timeout in seconds
         """
         self.gateway_url = gateway_url.rstrip("/")
+        self.auth = (username, password)
         self.timeout = timeout
         self._client: Optional[httpx.AsyncClient] = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
         if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(timeout=self.timeout)
+            self._client = httpx.AsyncClient(timeout=self.timeout, auth=self.auth)
         return self._client
 
     async def close(self) -> None:
@@ -41,7 +50,7 @@ class SMSGatewayClient:
         Send an SMS via the Android gateway.
 
         Args:
-            to: Destination phone number
+            to: Destination phone number (E.164 format, e.g., +61430562793)
             message: SMS message content
 
         Returns:
@@ -49,23 +58,20 @@ class SMSGatewayClient:
         """
         client = await self._get_client()
 
-        # Common payload format for SMS gateway apps
-        # Adjust based on your specific gateway app's API
         payload = {
-            "phone": to,
+            "phoneNumbers": [to],
             "message": message,
         }
 
         try:
             response = await client.post(
-                f"{self.gateway_url}/send",
+                f"{self.gateway_url}/message",
                 json=payload,
             )
             response.raise_for_status()
 
             data = response.json()
-            # Response format varies by gateway app - adjust as needed
-            message_id = data.get("id") or data.get("message_id")
+            message_id = data.get("id")
             return True, message_id, None
 
         except httpx.HTTPStatusError as e:
@@ -97,21 +103,21 @@ class SMSGatewayClient:
 
         try:
             response = await client.get(
-                f"{self.gateway_url}/status/{message_id}",
+                f"{self.gateway_url}/message/{message_id}",
             )
             response.raise_for_status()
 
             data = response.json()
-            status_str = data.get("status", "").lower()
+            state = data.get("state", "").lower()
 
-            # Map gateway status to our enum
             status_map = {
                 "pending": MessageStatus.PENDING,
+                "processed": MessageStatus.SENT,
                 "sent": MessageStatus.SENT,
                 "delivered": MessageStatus.DELIVERED,
                 "failed": MessageStatus.FAILED,
             }
-            return status_map.get(status_str, MessageStatus.PENDING)
+            return status_map.get(state, MessageStatus.PENDING)
 
         except Exception as e:
             logger.error(f"Failed to check message status: {e}")

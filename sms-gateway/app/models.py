@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class MessageDirection(str, Enum):
@@ -42,8 +42,7 @@ class IncomingSMSWebhook(BaseModel):
     timestamp: Optional[datetime] = Field(default=None, description="Message timestamp")
     device_id: Optional[str] = Field(default=None, description="Android device identifier")
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class SMSMessage(BaseModel):

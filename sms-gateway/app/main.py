@@ -1,16 +1,31 @@
 """FastAPI SMS Gateway service."""
 
-import hashlib
-import hmac
 import logging
-import os
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import FastAPI, Header, HTTPException, Query
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+load_dotenv()
+
+
+class Settings(BaseSettings):
+    """Application settings loaded from environment."""
+
+    android_gateway_url: str = "http://localhost:8080"
+    sms_gateway_username: str = ""
+    sms_gateway_password: str = ""
+    your_phone_number: str = ""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+
+settings = Settings()
 
 from .models import (
     IncomingSMSWebhook,
@@ -42,9 +57,15 @@ async def lifespan(app: FastAPI):
     """Application lifespan handler."""
     global sms_client
 
-    gateway_url = os.getenv("ANDROID_GATEWAY_URL", "http://localhost:8080")
-    sms_client = SMSGatewayClient(gateway_url)
-    logger.info(f"SMS Gateway client initialized with URL: {gateway_url}")
+    if not settings.sms_gateway_username or not settings.sms_gateway_password:
+        logger.warning("SMS_GATEWAY_USERNAME or SMS_GATEWAY_PASSWORD not set")
+
+    sms_client = SMSGatewayClient(
+        settings.android_gateway_url,
+        settings.sms_gateway_username,
+        settings.sms_gateway_password,
+    )
+    logger.info(f"SMS Gateway client initialized with URL: {settings.android_gateway_url}")
 
     yield
 
@@ -70,12 +91,6 @@ app.add_middleware(
 )
 
 
-def verify_webhook_signature(payload: bytes, signature: str, secret: str) -> bool:
-    """Verify webhook signature for security."""
-    expected = hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, signature)
-
-
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
@@ -86,7 +101,7 @@ async def health_check():
     return {
         "status": "healthy",
         "gateway_connected": gateway_healthy,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -114,7 +129,7 @@ async def send_sms(request: SendSMSRequest):
             phone_number=request.to,
             message=request.message,
             status=MessageStatus.SENT,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
         )
         message_store.append(stored_message)
         logger.info(f"SMS sent successfully, message_id: {msg_id}")
@@ -126,24 +141,13 @@ async def send_sms(request: SendSMSRequest):
 
 
 @app.post("/sms/incoming")
-async def incoming_sms_webhook(
-    webhook: IncomingSMSWebhook,
-    x_webhook_signature: Optional[str] = Header(None),
-):
+async def incoming_sms_webhook(webhook: IncomingSMSWebhook):
     """
     Webhook endpoint to receive incoming SMS from Android gateway.
 
     The Android SMS gateway app should be configured to POST to this endpoint
     when a new SMS is received on the phone.
     """
-    webhook_secret = os.getenv("WEBHOOK_SECRET")
-
-    # Verify signature if secret is configured (optional but recommended)
-    # Note: Signature verification depends on gateway app capabilities
-    if webhook_secret and x_webhook_signature:
-        # This is a simplified check - actual implementation depends on gateway
-        logger.debug("Webhook signature verification enabled")
-
     logger.info(f"Received SMS from {webhook.from_number}: {webhook.message[:50]}...")
 
     # Store the incoming message
@@ -153,7 +157,7 @@ async def incoming_sms_webhook(
         phone_number=webhook.from_number,
         message=webhook.message,
         status=MessageStatus.RECEIVED,
-        timestamp=webhook.timestamp or datetime.utcnow(),
+        timestamp=webhook.timestamp or datetime.now(timezone.utc),
         metadata={"device_id": webhook.device_id} if webhook.device_id else None,
     )
     message_store.append(stored_message)
