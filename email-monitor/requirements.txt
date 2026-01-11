@@ -1,0 +1,15 @@
+# FastAPI and web server
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# Database
+sqlalchemy==2.0.25
+psycopg2-binary==2.9.9
+
+# Email handling
+# No external dependencies needed - using Python's built-in imaplib and email modules
+
+# Utilities
+python-dotenv==1.0.0

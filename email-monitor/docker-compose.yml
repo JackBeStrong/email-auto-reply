@@ -1,0 +1,28 @@
+services:
+  email-monitor:
+    build: .
+    ports:
+      - "8001:8001"
+    environment:
+      # Email configuration
+      - IMAP_SERVER=${IMAP_SERVER:-imap.gmail.com}
+      - IMAP_PORT=${IMAP_PORT:-993}
+      - EMAIL_ADDRESS=${EMAIL_ADDRESS}
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD}
+      - POLL_INTERVAL=${POLL_INTERVAL:-120}
+      
+      # Database configuration
+      - DB_HOST=${DB_HOST:-192.168.1.228}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-email_auto_reply}
+      - DB_USER=${DB_USER:-readwrite}
+      - DB_PASSWORD=${DB_PASSWORD}
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8001/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
