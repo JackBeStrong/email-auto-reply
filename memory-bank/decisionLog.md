@@ -219,3 +219,56 @@ Deploy email-monitor as separate Docker container alongside SMS gateway in same 
 ## Update Log
 2026-01-11 20:03:36 - Initial decision log created with Phase 1 architectural decisions
 2026-01-12 13:43:00 - Added Phase 2 (Email Monitor) architectural decisions
+2026-01-12 16:50:47 - Added Phase 3 critical bug fixes and architectural improvements
+
+---
+
+## [2026-01-12 16:50:47] Critical Fix: Email Body Storage
+
+### Issue Discovered
+During Phase 3 deployment testing, discovered that email body content (`body_text`, `body_html`) was not being stored in the database. The `processed_emails` table only stored metadata (subject, from, to), causing the AI reply generator to receive empty email bodies and generate placeholder responses instead of contextual replies.
+
+### Root Cause
+Original Phase 2 implementation focused on email filtering and status workflow but overlooked storing the actual email content needed for AI reply generation in Phase 3.
+
+### Solution Implemented
+1. **Database Schema**: Added `body_text TEXT` and `body_html TEXT` columns to `processed_emails` table
+2. **Database Model**: Updated `ProcessedEmailDB` SQLAlchemy model with new columns
+3. **Database Manager**: Modified `mark_processed()` to accept and store body content
+4. **Email Monitor**: Updated both `mark_processed()` calls to pass `body_text` and `body_html`
+5. **API Endpoint**: Modified `/emails/{message_id}` to return full email details including body
+
+### Impact
+- AI reply generator now receives complete email content
+- Generates contextual, professional replies with specific details (amounts, dates, product names)
+- System fully functional for Phase 3 completion
+
+---
+
+## [2026-01-12 16:50:47] Architectural Improvement: Remove UNREAD Filter
+
+### Issue Identified
+Email monitor only fetched UNREAD emails using IMAP `UNSEEN` flag. This created problems:
+- Emails read on phone/computer wouldn't be processed
+- User might read an email but still need to reply later
+- Gmail read/unread status shouldn't dictate processing logic
+
+### Decision
+Remove UNREAD filter and fetch ALL recent emails, relying on database `is_processed()` check to prevent duplicates.
+
+### Rationale
+- **Separation of Concerns**: Gmail read status ≠ reply status
+- **User Flexibility**: Can reply to already-read emails
+- **Database as Source of Truth**: `processed_emails` table tracks what's been processed
+- **No Duplicates**: Existing `is_processed()` check prevents reprocessing
+
+### Implementation
+1. Changed IMAP search from `UNSEEN` to `ALL`
+2. Increased fetch limit from 20 to 100 emails
+3. Updated docstrings to reflect new behavior
+4. Database check prevents duplicate processing
+
+### Benefits
+- More flexible workflow (read status doesn't matter)
+- Processes more emails per poll (100 vs 20)
+- Better user experience (can reply to read emails)
