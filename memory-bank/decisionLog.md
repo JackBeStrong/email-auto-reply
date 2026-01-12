@@ -90,11 +90,132 @@ Implement system in 4 distinct phases: SMS Gateway → Email Monitor → AI Repl
 
 ### Implementation Details
 - Phase 1 (SMS Gateway): ✅ Complete and deployed
-- Phase 2 (Email Monitor): Next focus area
-- Phase 3 (AI Reply Generator): Depends on Phase 2 completion
+- Phase 2 (Email Monitor): ✅ Complete and deployed
+- Phase 3 (AI Reply Generator): Next focus area
 - Phase 4 (Orchestrator): Final integration layer
+
+---
+
+## [2026-01-12 13:43:00] Email Monitor - IMAP Polling Architecture
+
+### Decision
+Use IMAP polling with Python's built-in `imaplib` to monitor Gmail inbox, with configurable polling interval.
+
+### Rationale
+- **Simplicity**: IMAP is simpler than Gmail API OAuth2 flow for automated deployment
+- **Deployment-Friendly**: App-specific password in Ansible vault, no OAuth token management
+- **Universal**: Works with any IMAP server, not just Gmail
+- **Sufficient Latency**: 120-second polling interval acceptable for personal use
+- **No External Dependencies**: Built-in Python library, no additional API setup
+
+### Alternatives Considered
+- **Gmail API with Push Notifications**: More complex (Pub/Sub, webhooks), real-time but overkill
+- **Gmail API with Polling**: Still requires OAuth2 setup, harder to automate deployment
+
+### Implementation Details
+- Poll interval: 120 seconds (configurable via `POLL_INTERVAL` env var)
+- Fetches unread emails only (`UNSEEN` flag)
+- Parses email headers, body (text/html), threading info
+- Marks emails as processed in database to avoid reprocessing
+- Runs as background asyncio task in FastAPI
+
+---
+
+## [2026-01-12 13:43:00] PostgreSQL for State Management
+
+### Decision
+Use PostgreSQL with SQLAlchemy ORM for persistent state management instead of file-based storage.
+
+### Rationale
+- **Persistence**: Data survives container restarts and redeployments
+- **Existing Infrastructure**: PostgreSQL server already running (192.168.1.228)
+- **Concurrent Access**: Multiple services can access same data (future phases)
+- **Query Capabilities**: Complex queries for reporting and analytics
+- **Transaction Safety**: ACID compliance for data integrity
+- **No Manual Management**: SQLAlchemy handles connections, commits, rollbacks
+
+### Implementation Details
+- Database: `email_auto_reply` on existing PostgreSQL server
+- Users: `readonly` (queries), `readwrite` (service access)
+- Tables: `processed_emails`, `email_filter_rules`, `sms_notifications`, `audit_log`
+- ORM: SQLAlchemy 2.0 with declarative models
+- Connection pooling: 10 connections max
+- Password from Ansible vault: `ALGO_TRADING_DB_PASSWORD_RW`
+
+---
+
+## [2026-01-12 13:43:00] Database-Driven Email Filtering
+
+### Decision
+Store whitelist/blacklist filter rules in PostgreSQL database, manageable via REST API.
+
+### Rationale
+- **Dynamic Configuration**: Update rules without redeploying service
+- **Persistence**: Rules survive restarts
+- **API Management**: Add/remove rules via HTTP endpoints
+- **Audit Trail**: Track when rules were added/modified
+- **Flexibility**: Support multiple rule types (sender, subject, domain)
+
+### Alternatives Considered
+- **Environment Variables**: Static, requires redeploy to change
+- **Config Files**: Requires container restart to reload
+
+### Implementation Details
+- Rule types: `whitelist_sender`, `blacklist_sender`, `whitelist_subject`, `blacklist_subject`
+- Pattern matching: Exact match or domain match (e.g., `@spam.com`)
+- Priority: Blacklist checked first, then whitelist
+- Default rules: Block `noreply@`, `no-reply@`, `newsletter`, `unsubscribe`
+- API endpoints: `GET /filter/rules`, `POST /filter/rules`, `DELETE /filter/rules/{id}`
+
+---
+
+## [2026-01-12 13:43:00] Email Status Workflow
+
+### Decision
+Track email processing state with status field: `pending` → `sent`/`ignored`/`failed`.
+
+### Rationale
+- **Clear State Machine**: Each email has defined lifecycle
+- **Idempotency**: Prevent reprocessing same email
+- **Debugging**: Track where emails are in the pipeline
+- **Reporting**: Query emails by status for analytics
+
+### Status Values
+- **`pending`**: Email fetched, passed filters, awaiting AI reply generation (Phase 3)
+- **`filtered`**: Email blocked by blacklist rules, no further processing
+- **`sent`**: Reply generated and sent (Phase 4)
+- **`ignored`**: User chose to ignore via SMS (Phase 4)
+- **`failed`**: Error occurred during processing
+
+### Implementation Details
+- Status stored in `processed_emails.status` column
+- Indexed for fast queries
+- Updated via `DatabaseManager.update_status()` method
+- Exposed via REST API: `POST /emails/{message_id}/status`
+
+---
+
+## [2026-01-12 13:43:00] Microservice Deployment Pattern
+
+### Decision
+Deploy email-monitor as separate Docker container alongside SMS gateway in same LXC.
+
+### Rationale
+- **Independent Scaling**: Each service can be restarted independently
+- **Resource Isolation**: Separate containers for better resource management
+- **Port Separation**: SMS Gateway (8000), Email Monitor (8001)
+- **Shared Infrastructure**: Both use same LXC, Filebeat, Kafka logging
+- **Simplified Deployment**: Single Ansible playbook deploys both services
+
+### Implementation Details
+- LXC Container: 118 @ 192.168.1.238
+- Resources: 1024MB RAM, 2 CPU cores, 8GB disk (shared)
+- Containers: `sms-gateway` (port 8000), `email-monitor` (port 8001)
+- Logging: Both forward logs to Kafka via Filebeat
+- Deployment: Ansible playbook builds and runs both containers
 
 ---
 
 ## Update Log
 2026-01-11 20:03:36 - Initial decision log created with Phase 1 architectural decisions
+2026-01-12 13:43:00 - Added Phase 2 (Email Monitor) architectural decisions

@@ -177,7 +177,137 @@ SMS_GATEWAY_PASSWORD = os.getenv("SMS_GATEWAY_PASSWORD")
 - Service identification via `service: email-auto-reply` field
 - Real-time log streaming available via `docker logs -f`
 
+## Database Patterns (Phase 2)
+
+### SQLAlchemy ORM Pattern
+- Declarative base models for all tables
+- Automatic session management with context managers
+- Connection pooling (10 connections max)
+- No manual commit/rollback - ORM handles transactions
+- Type-safe queries with model classes
+
+### Database Manager Pattern
+```python
+class DatabaseManager:
+    def __init__(self, database_url: str):
+        self.engine = create_engine(database_url, pool_size=10)
+        self.SessionLocal = sessionmaker(bind=self.engine)
+    
+    def get_session(self) -> Session:
+        return self.SessionLocal()
+    
+    # Methods use context managers for automatic cleanup
+    def is_processed(self, message_id: str) -> bool:
+        with self.get_session() as session:
+            return session.query(Model).filter_by(...).first() is not None
+```
+
+### State Management Pattern
+- All email state in PostgreSQL (no file-based storage)
+- Status field tracks lifecycle: pending → sent/ignored/failed
+- Idempotent operations (check before insert)
+- Indexed queries for performance
+- Audit trail via created_at/updated_at timestamps
+
+## Email Processing Patterns (Phase 2)
+
+### IMAP Polling Pattern
+- Background asyncio task runs continuously
+- Configurable poll interval (default 120 seconds)
+- Fetch only UNSEEN emails
+- Parse headers, body (text/HTML), threading info
+- Mark as processed in database to avoid reprocessing
+
+### Email Parsing Pattern
+```python
+# Extract both text and HTML bodies
+def _extract_body(email_message):
+    body_text = None
+    body_html = None
+    
+    if email_message.is_multipart():
+        for part in email_message.walk():
+            if part.get_content_type() == "text/plain":
+                body_text = part.get_payload(decode=True)
+            elif part.get_content_type() == "text/html":
+                body_html = part.get_payload(decode=True)
+    
+    return body_text, body_html
+```
+
+### Filter Rules Pattern
+- Database-driven configuration (not environment variables)
+- Priority: Blacklist → Whitelist → Default (accept)
+- Pattern matching: exact match or domain match (@example.com)
+- Case-insensitive matching
+- Manageable via REST API without redeployment
+
+## API Endpoint Patterns (Phase 2)
+
+### Email Monitor Endpoints
+- `GET /health` - Service health with email counts
+- `GET /emails/pending` - Emails awaiting AI reply
+- `GET /emails/processed` - All processed emails
+- `GET /emails/{message_id}` - Specific email status
+- `POST /emails/{message_id}/status` - Update email status
+- `GET /filter/config` - Current filter configuration
+- `GET /filter/rules` - All filter rules
+- `POST /filter/rules` - Add new filter rule
+- `DELETE /filter/rules/{id}` - Remove filter rule
+- `POST /cleanup?days=30` - Clean up old entries
+
+### Response Format Pattern
+```python
+# Consistent response structure
+{
+    "emails": [...],  # or "rules", "status", etc.
+    "total": 39
+}
+
+# Health check format
+{
+    "status": "healthy",
+    "service": "email-monitor",
+    "processed_emails": 39,
+    "pending_emails": 39
+}
+```
+
+## Deployment Patterns (Phase 2)
+
+### Multi-Service LXC Pattern
+- Single LXC hosts multiple Docker containers
+- Each service on different port (SMS: 8000, Email: 8001)
+- Shared infrastructure (Filebeat, Kafka logging)
+- Independent restart/rebuild per service
+- Ansible playbook deploys all services
+
+### Database Connection Pattern
+- Service connects to external PostgreSQL server
+- Connection string from environment variables
+- Password from Ansible vault
+- Connection pooling for efficiency
+- Automatic reconnection on failure
+
+### Environment Variable Pattern
+```bash
+# Email Monitor Configuration
+IMAP_SERVER=imap.gmail.com
+IMAP_PORT=993
+EMAIL_ADDRESS=junzhouan@gmail.com
+EMAIL_PASSWORD={{ GMAIL_APP_PASSWORD }}  # from vault
+POLL_INTERVAL=120
+
+# Database Configuration
+DB_HOST=192.168.1.228
+DB_PORT=5432
+DB_NAME=email_auto_reply
+DB_USER=readwrite
+DB_PASSWORD={{ ALGO_TRADING_DB_PASSWORD_RW }}  # from vault
+```
+
 ---
 
 ## Update Log
 2026-01-11 20:05:25 - Initial system patterns documented based on Phase 1 implementation and Ansible deployment configuration
+2026-01-12 13:47:00 - Added Phase 2 patterns: Database (SQLAlchemy), Email Processing (IMAP), API endpoints, Multi-service deployment

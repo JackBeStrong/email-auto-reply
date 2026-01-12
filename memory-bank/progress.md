@@ -29,23 +29,32 @@ This file tracks the project's progress using a task list format.
 - [x] Configure HTTPS for sms.jackan.xyz domain
 - [x] Verify external webhook accessibility
 
+### Phase 2: Email Monitor Service ✅ COMPLETE
+- [x] Research Gmail API vs IMAP approaches (chose IMAP for simplicity)
+- [x] Design Email Monitor component architecture
+- [x] Define email filtering criteria and rules
+- [x] Set up PostgreSQL database schema
+- [x] Implement IMAP client with email parsing
+- [x] Create email parsing and filtering logic (whitelist/blacklist)
+- [x] Build email content extraction (text/HTML, headers, threading)
+- [x] Implement email thread context tracking
+- [x] Add PostgreSQL state management with SQLAlchemy ORM
+- [x] Create database-driven filter rules (manageable via API)
+- [x] Implement REST API for email and filter management
+- [x] Create Docker configuration (Dockerfile, docker-compose.yml)
+- [x] Write test suite for email filtering logic
+- [x] Deploy to LXC 118 (port 8001) alongside SMS Gateway
+- [x] Verify end-to-end email processing (39 emails processed)
+
 ## Current Tasks
 
-### Phase 2: Email Monitor - Planning & Design
-- [ ] Research Gmail API vs IMAP approaches
-- [ ] Design Email Monitor component architecture
-- [ ] Define email filtering criteria and rules
+### Phase 3: AI Reply Generator - Planning & Design
+- [ ] Research Claude API integration approaches
+- [ ] Design prompt templates for reply generation
+- [ ] Define context extraction from email threads
+- [ ] Plan reply quality validation
 
 ## Next Steps
-
-### Phase 2: Email Monitor (Upcoming)
-- [ ] Set up Gmail API credentials and OAuth2
-- [ ] Implement Gmail webhook listener (push notifications)
-- [ ] Create email parsing and filtering logic
-- [ ] Build email content extraction
-- [ ] Implement email thread context tracking
-- [ ] Add database for email state management
-- [ ] Create tests for email monitoring
 
 ### Phase 3: AI Reply Generator (Future)
 - [ ] Set up Claude API integration
@@ -69,7 +78,11 @@ This file tracks the project's progress using a task list format.
 ## Milestones
 
 - **2026-01-11**: ✅ Phase 1 (SMS Gateway) fully complete and deployed
-- **TBD**: Phase 2 (Email Monitor) complete
+- **2026-01-12**: ✅ Phase 2 (Email Monitor) fully complete and deployed
+  - 39 emails successfully processed and stored in PostgreSQL
+  - Filter rules active (blacklisting no-reply@, noreply@, newsletter, unsubscribe)
+  - Service running on port 8001 in LXC 118 @ 192.168.1.238
+  - Database: email_auto_reply @ 192.168.1.228
 - **TBD**: Phase 3 (AI Reply Generator) complete
 - **TBD**: Phase 4 (Orchestrator) complete
 - **TBD**: Full system integration and production deployment

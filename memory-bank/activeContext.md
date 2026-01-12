@@ -8,78 +8,90 @@ This file tracks the project's current status, including recent changes, current
 
 ## Current Focus
 
-**Phase 1 Complete - Preparing for Phase 2**
+**Phase 2 Complete - Preparing for Phase 3**
 
-The SMS Gateway service is fully implemented and operational. The immediate focus is on:
-- Testing real incoming SMS via webhook (send SMS to Moto E14, verify service logs)
-- Deploying service behind Traefik at sms.jackan.xyz
-- Beginning Phase 2: Email Monitor implementation
+The Email Monitor service is fully implemented, deployed, and operational. The immediate focus is on:
+- Planning Phase 3: AI Reply Generator with Claude API
+- Designing prompt templates for contextual reply generation
+- Integrating with existing email-monitor service
 
 ## Recent Changes
 
-2026-01-11 20:02:16 - Memory Bank initialized for project tracking and context management
+2026-01-12 13:46:00 - Phase 2 (Email Monitor) completed and deployed
 
-### Phase 1: SMS Gateway (Complete)
-- ✅ FastAPI application with core endpoints implemented
-- ✅ Android SMS Gateway integration (Moto E14 @ 192.168.1.224:8080)
-- ✅ Webhook handling with HMAC signature verification
-- ✅ Message history and logging
-- ✅ Docker containerization setup
-- ✅ Test suite created
+### Phase 1: SMS Gateway ✅ COMPLETE
+- Service running on port 8000 in LXC 118
+- Deployed behind Traefik at sms.jackan.xyz
+- Android SMS Gateway integration operational
+
+### Phase 2: Email Monitor ✅ COMPLETE
+- ✅ IMAP client implemented with 120-second polling
+- ✅ PostgreSQL database schema created (email_auto_reply @ 192.168.1.228)
+- ✅ SQLAlchemy ORM for state management
+- ✅ Database-driven filter rules (whitelist/blacklist)
+- ✅ Email parsing (headers, text/HTML body, threading)
+- ✅ REST API for email and filter management
+- ✅ Docker containerization
+- ✅ Deployed to LXC 118 on port 8001
+- ✅ End-to-end testing: 39 emails processed successfully
 
 **Current Deployment Status:**
-- Service running locally on port 8765
-- Android phone configured with static IP
-- Webhook registered for `sms:received` events
-- Basic auth credentials configured
+- SMS Gateway: port 8000, LXC 118 @ 192.168.1.238
+- Email Monitor: port 8001, LXC 118 @ 192.168.1.238
+- Database: PostgreSQL @ 192.168.1.228:5432/email_auto_reply
+- Both services logging to Kafka via Filebeat
 
 ## Open Questions/Issues
 
-### Deployment & Testing
-1. **Webhook Testing**: Need to verify end-to-end incoming SMS webhook flow
-   - Send test SMS to Moto E14
-   - Confirm webhook delivery to service
-   - Validate HMAC signature verification
-   - Check message logging
+### Phase 3 Planning
+1. **Claude API Integration**: How to structure API calls
+   - Use Anthropic Python SDK or direct HTTP requests?
+   - How to handle rate limits and retries?
+   - Cost management and monitoring
 
-2. **Traefik Deployment**: Service needs to be deployed behind reverse proxy
-   - Configure Traefik routing for sms.jackan.xyz
-   - Set up HTTPS certificates
-   - Test external webhook accessibility
+2. **Prompt Engineering**: Design effective prompts for reply generation
+   - Include email thread context
+   - Maintain consistent tone/style
+   - Handle different email types (formal, casual, technical)
 
-### Phase 2 Planning
-3. **Gmail Integration Method**: Need to decide between:
-   - Gmail API with push notifications (recommended for real-time)
-   - IMAP polling (simpler but less efficient)
-   - Gmail API with periodic polling
+3. **Reply Quality**: How to validate generated replies
+   - Length constraints
+   - Tone appropriateness
+   - Factual accuracy checks
+   - User feedback loop
 
-4. **Email Filtering**: Define criteria for which emails should trigger auto-reply
-   - Exclude automated emails (newsletters, notifications)
-   - Handle specific senders/domains
-   - Consider email thread context
+4. **Context Extraction**: What context to provide to Claude
+   - Full email thread or just latest message?
+   - Include sender information?
+   - Previous interactions with sender?
 
-5. **State Management**: How to track email-reply-SMS workflow state
-   - Database choice (SQLite, PostgreSQL, Redis?)
-   - Session management for pending replies
-   - Timeout handling for unanswered SMS prompts
+### Phase 4 Planning
+5. **SMS Notification Format**: How to present email + draft reply via SMS
+   - Character limits (160 chars per SMS)
+   - Multi-part messages
+   - Command syntax for approve/edit/ignore
 
-### Architecture Decisions
-6. **Component Communication**: How should services communicate?
-   - Direct HTTP calls between services
-   - Message queue (RabbitMQ, Redis pub/sub)
-   - Shared database
+6. **SMTP Integration**: How to send replies
+   - Use Gmail SMTP or Gmail API?
+   - Handle authentication
+   - Track sent emails
 
-7. **Error Handling**: Strategy for failures at each stage
-   - Email monitoring failures
-   - Claude API rate limits/errors
+7. **Error Handling**: Strategy for failures
+   - Claude API errors
    - SMS delivery failures
+   - Email sending failures
    - User timeout scenarios
 
 ---
 
 ## Next Immediate Steps
 
-1. Test incoming SMS webhook with real device
-2. Deploy SMS Gateway behind Traefik
-3. Design Email Monitor component architecture
-4. Set up Gmail API credentials and permissions
+1. Research Claude API and Anthropic SDK
+2. Design prompt templates for reply generation
+3. Plan Phase 3 architecture (AI Reply Generator)
+4. Consider cost implications of Claude API usage
+5. Design integration between Email Monitor and AI Reply Generator
+
+---
+
+[2026-01-12 13:46:00] - Phase 2 (Email Monitor) completed and deployed successfully
