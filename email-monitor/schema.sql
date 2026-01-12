@@ -320,3 +320,26 @@ GRANT SELECT ON filter_rules_active TO readwrite;
 \echo '  Readonly:  postgresql://readonly:password@192.168.1.228:5432/email_auto_reply'
 \echo '  Readwrite: postgresql://readwrite:password@192.168.1.228:5432/email_auto_reply'
 \echo '============================================================================'
+
+-- ============================================================================
+-- Migration: Add body_text and body_html columns to processed_emails table
+-- Date: 2026-01-12
+-- Description: Adds email body storage to support AI reply generation
+-- ============================================================================
+
+-- Add body_text column
+ALTER TABLE processed_emails
+ADD COLUMN IF NOT EXISTS body_text TEXT;
+
+-- Add body_html column
+ALTER TABLE processed_emails
+ADD COLUMN IF NOT EXISTS body_html TEXT;
+
+-- Add comments
+COMMENT ON COLUMN processed_emails.body_text IS 'Plain text version of email body';
+COMMENT ON COLUMN processed_emails.body_html IS 'HTML version of email body';
+
+\echo ''
+\echo '============================================================================'
+\echo 'Migration completed: Added body_text and body_html columns'
+\echo '============================================================================'

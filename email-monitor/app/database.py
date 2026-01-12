@@ -30,6 +30,8 @@ class ProcessedEmailDB(Base):
     subject = Column(Text)
     from_address = Column(String(255), nullable=False, index=True)
     to_addresses = Column(ARRAY(Text))
+    body_text = Column(Text)
+    body_html = Column(Text)
     received_at = Column(TIMESTAMP(timezone=True), nullable=False)
     processed_at = Column(TIMESTAMP(timezone=True), nullable=False, default=datetime.now, index=True)
     status = Column(String(50), nullable=False, default='pending', index=True)
@@ -142,7 +144,9 @@ class DatabaseManager:
         reply_draft: Optional[str] = None,
         error_message: Optional[str] = None,
         thread_id: Optional[str] = None,
-        in_reply_to: Optional[str] = None
+        in_reply_to: Optional[str] = None,
+        body_text: Optional[str] = None,
+        body_html: Optional[str] = None
     ) -> int:
         """
         Mark an email as processed
@@ -159,6 +163,10 @@ class DatabaseManager:
                 existing.status = status
                 existing.reply_draft = reply_draft
                 existing.error_message = error_message
+                if body_text is not None:
+                    existing.body_text = body_text
+                if body_html is not None:
+                    existing.body_html = body_html
                 existing.updated_at = datetime.now()
                 session.commit()
                 email_id = existing.id
@@ -170,6 +178,8 @@ class DatabaseManager:
                     subject=subject,
                     from_address=from_address,
                     to_addresses=to_addresses,
+                    body_text=body_text,
+                    body_html=body_html,
                     received_at=received_at,
                     status=status,
                     reply_draft=reply_draft,

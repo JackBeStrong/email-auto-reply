@@ -65,7 +65,7 @@ class IMAPClient:
     
     def fetch_unread_emails(self, limit: int = 10) -> List[EmailMessage]:
         """
-        Fetch unread emails from the inbox
+        Fetch recent emails from the inbox (regardless of read/unread status)
         
         Args:
             limit: Maximum number of emails to fetch
@@ -78,19 +78,20 @@ class IMAPClient:
         
         self.select_mailbox("INBOX")
         
-        # Search for unread emails
-        status, message_ids = self.connection.search(None, "UNSEEN")
+        # Search for ALL emails (not just unread)
+        # The database will track which ones have been processed
+        status, message_ids = self.connection.search(None, "ALL")
         if status != "OK":
-            logger.error("Failed to search for unread emails")
+            logger.error("Failed to search for emails")
             return []
         
         # Get list of message IDs
         id_list = message_ids[0].split()
         if not id_list:
-            logger.debug("No unread emails found")
+            logger.debug("No emails found")
             return []
         
-        # Limit the number of emails to fetch
+        # Fetch the most recent emails (last N messages)
         id_list = id_list[-limit:] if len(id_list) > limit else id_list
         
         emails = []
@@ -103,7 +104,7 @@ class IMAPClient:
                 logger.error(f"Error fetching email {msg_id}: {e}")
                 continue
         
-        logger.info(f"Fetched {len(emails)} unread emails")
+        logger.info(f"Fetched {len(emails)} emails")
         return emails
     
     def _fetch_email_by_id(self, msg_id: bytes) -> Optional[EmailMessage]:

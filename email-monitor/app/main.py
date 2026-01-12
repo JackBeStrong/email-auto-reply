@@ -55,8 +55,8 @@ async def poll_emails():
             
             # Connect to IMAP server
             with IMAPClient(IMAP_SERVER, EMAIL_ADDRESS, EMAIL_PASSWORD, IMAP_PORT) as client:
-                # Fetch unread emails
-                emails = client.fetch_unread_emails(limit=20)
+                # Fetch recent emails (last 100)
+                emails = client.fetch_unread_emails(limit=100)
                 
                 new_emails = []
                 for email_msg in emails:
@@ -77,7 +77,9 @@ async def poll_emails():
                             status="filtered",
                             error_message="Filtered by whitelist/blacklist rules",
                             thread_id=email_msg.thread_id,
-                            in_reply_to=email_msg.in_reply_to
+                            in_reply_to=email_msg.in_reply_to,
+                            body_text=email_msg.body_text,
+                            body_html=email_msg.body_html
                         )
                         continue
                     
@@ -90,7 +92,9 @@ async def poll_emails():
                         received_at=email_msg.received_at,
                         status="pending",
                         thread_id=email_msg.thread_id,
-                        in_reply_to=email_msg.in_reply_to
+                        in_reply_to=email_msg.in_reply_to,
+                        body_text=email_msg.body_text,
+                        body_html=email_msg.body_html
                     )
                     new_emails.append(email_msg)
                     logger.info(f"New email from {email_msg.from_address}: {email_msg.subject}")
@@ -253,19 +257,29 @@ async def get_processed_emails(limit: int = 100):
 
 @app.get("/emails/{message_id}")
 async def get_email_status(message_id: str):
-    """Get status of a specific email"""
-    email = db_manager.get_processed_email(message_id)
-    
-    if not email:
-        raise HTTPException(status_code=404, detail="Email not found")
-    
-    return {
-        "message_id": message_id,
-        "processed_at": email.processed_at.isoformat(),
-        "status": email.status,
-        "reply_draft": email.reply_draft,
-        "error_message": email.error_message
-    }
+    """Get full email details including body content"""
+    from .database import ProcessedEmailDB
+    with db_manager.get_session() as session:
+        email = session.query(ProcessedEmailDB).filter_by(message_id=message_id).first()
+        
+        if not email:
+            raise HTTPException(status_code=404, detail="Email not found")
+        
+        return {
+            "message_id": email.message_id,
+            "subject": email.subject,
+            "from_address": email.from_address,
+            "to_addresses": email.to_addresses,
+            "body_text": email.body_text,
+            "body_html": email.body_html,
+            "received_at": email.received_at.isoformat() if email.received_at else None,
+            "processed_at": email.processed_at.isoformat(),
+            "status": email.status,
+            "reply_draft": email.reply_draft,
+            "error_message": email.error_message,
+            "thread_id": email.thread_id,
+            "in_reply_to": email.in_reply_to
+        }
 
 
 @app.post("/emails/{message_id}/status")
