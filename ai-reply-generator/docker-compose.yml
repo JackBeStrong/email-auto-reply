@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  ai-reply-generator:
+    build: .
+    container_name: ai-reply-generator
+    ports:
+      - "8002:8002"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+      - EMAIL_MONITOR_URL=${EMAIL_MONITOR_URL:-http://localhost:8001}
+      - SERVICE_PORT=8002
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-3-5-sonnet-20241022}
+      - CLAUDE_MAX_TOKENS=${CLAUDE_MAX_TOKENS:-1024}
+      - CLAUDE_TEMPERATURE=${CLAUDE_TEMPERATURE:-0.7}
+      - SMS_FRIENDLY_MAX_LENGTH=${SMS_FRIENDLY_MAX_LENGTH:-300}
+      - SUMMARY_MAX_LENGTH=${SUMMARY_MAX_LENGTH:-150}
+    env_file:
+      - .env
+    restart: unless-stopped
+    network_mode: host
