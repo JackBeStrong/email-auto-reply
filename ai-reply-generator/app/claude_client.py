@@ -15,7 +15,7 @@ class ClaudeClient:
     """Wrapper for Claude API interactions"""
     
     # Model configuration
-    DEFAULT_MODEL = "claude-3-5-sonnet-20241022"
+    DEFAULT_MODEL = "claude-sonnet-4-5-20250929"
     MAX_TOKENS = 1024  # Maximum tokens for reply generation
     TEMPERATURE = 0.7  # Balance between creativity and consistency
     

@@ -7,7 +7,7 @@ import secrets
 import string
 from datetime import datetime
 from typing import Optional, List, Dict
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 
@@ -85,7 +85,7 @@ class DatabaseManager:
         """Check if database connection is working"""
         try:
             with self.get_session() as session:
-                session.execute("SELECT 1")
+                session.execute(text("SELECT 1"))
             return True
         except Exception as e:
             logger.error(f"Database connection check failed: {e}")
