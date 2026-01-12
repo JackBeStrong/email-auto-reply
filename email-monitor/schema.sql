@@ -4,12 +4,11 @@
 -- ============================================================================
 
 -- Create database (run as postgres superuser)
+-- Note: Using default locale from template0
 CREATE DATABASE email_auto_reply
-    WITH 
+    WITH
     OWNER = postgres
     ENCODING = 'UTF8'
-    LC_COLLATE = 'en_US.UTF-8'
-    LC_CTYPE = 'en_US.UTF-8'
     TEMPLATE = template0;
 
 -- Connect to the database
