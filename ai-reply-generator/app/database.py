@@ -1,4 +1,4 @@
-?"""
+"""
 Database configuration and manager for AI Reply Generator
 """
 import os
