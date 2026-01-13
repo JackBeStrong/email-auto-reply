@@ -176,7 +176,7 @@ class WorkflowManager:
                 message_id,
                 WorkflowStateUpdate(
                     current_state="ai_generated",
-                    ai_reply_text=ai_response.reply_text,
+                    ai_reply_text=ai_response.full_draft,
                     ai_reply_generated_at=datetime.utcnow()
                 )
             )

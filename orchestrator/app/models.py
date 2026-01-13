@@ -96,10 +96,14 @@ class AIReplyRequest(BaseModel):
 
 class AIReplyResponse(BaseModel):
     """Response from AI Reply Generator"""
-    message_id: str
-    reply_text: str
-    reply_length: int
-    generated_at: str
+    draft_id: str
+    full_draft: str
+    short_summary: Optional[str] = None
+    length: int
+    is_sms_friendly: bool
+    tokens_used: int
+    model_version: str
+    generated_at: Optional[datetime] = None
 
 
 # SMS Models
