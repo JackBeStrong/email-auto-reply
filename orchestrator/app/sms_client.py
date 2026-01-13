@@ -99,53 +99,66 @@ def format_sms_notification(
     email_subject: str,
     email_body_preview: str,
     ai_reply: str,
+    message_id: str,
+    orchestrator_base_url: str = 'https://sms.jackan.xyz',
     format_type: str = 'condensed'
 ) -> str:
     """
     Format an SMS notification with email details and AI reply.
+    
+    For long drafts, generates a URL to view the full draft instead of truncating.
     
     Args:
         email_from: Sender email address
         email_subject: Email subject
         email_body_preview: Preview of email body
         ai_reply: AI-generated reply text
+        message_id: Email message ID (used for draft URL)
+        orchestrator_base_url: Base URL for orchestrator service
         format_type: 'condensed' or 'multipart'
         
     Returns:
-        Formatted SMS message
+        Formatted SMS message (with URL if draft is too long)
     """
     # Extract sender name from email address
     sender_name = email_from.split('<')[0].strip() if '<' in email_from else email_from.split('@')[0]
     
-    # Truncate body preview to fit in SMS
-    max_body_length = 80
+    # Truncate sender name if too long
+    if len(sender_name) > 20:
+        sender_name = sender_name[:20]
+    
+    # Truncate body preview
+    max_body_length = 50
     if len(email_body_preview) > max_body_length:
         body_preview = email_body_preview[:max_body_length] + "..."
     else:
         body_preview = email_body_preview
     
-    # Truncate AI reply if too long
-    max_reply_length = 150
-    if len(ai_reply) > max_reply_length:
-        reply_preview = ai_reply[:max_reply_length] + "..."
-    else:
-        reply_preview = ai_reply
+    # Calculate if we need to use URL approach
+    # SMS limit: ~160 chars for single SMS, ~320 for 2 segments
+    # We'll use URL if draft would exceed 160 chars in total message
     
-    if format_type == 'condensed':
-        # Condensed format for single SMS
-        message = (
-            f"📧 {sender_name}: \"{body_preview}\"\n"
-            f"Draft: \"{reply_preview}\"\n"
-            f"1=Send 2=Edit 3=Ignore"
-        )
-    else:
-        # Multi-part format (for future implementation)
-        message = (
-            f"📧 From: {sender_name}\n"
-            f"Subject: {email_subject}\n"
-            f"Body: \"{body_preview}\"\n"
-            f"Draft: \"{reply_preview}\"\n"
-            f"Reply: 1=Send 2=Edit 3=Ignore"
-        )
+    footer = "\n\n1=Send 2=Edit 3=Ignore"
+    header = f"📧 {sender_name}: \"{body_preview}\"\n\n"
     
-    return message
+    # Try inline draft first
+    inline_draft = f"Draft: \"{ai_reply}\""
+    inline_message = header + inline_draft + footer
+    
+    # If message fits in single SMS (160 chars), use inline
+    if len(inline_message) <= 160:
+        return inline_message
+    
+    # Otherwise, use URL approach
+    # URL encode message_id for safety
+    import urllib.parse
+    encoded_message_id = urllib.parse.quote(message_id, safe='')
+    draft_url = f"{orchestrator_base_url}/drafts/{encoded_message_id}"
+    
+    url_message = (
+        f"📧 {sender_name}: \"{body_preview}\"\n\n"
+        f"View draft: {draft_url}\n\n"
+        f"1=Send 2=Edit 3=Ignore"
+    )
+    
+    return url_message

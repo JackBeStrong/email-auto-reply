@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 
 from app.models import (
     IncomingSMSWebhook,
@@ -378,6 +378,286 @@ async def handle_sms_response(webhook: IncomingSMSWebhook):
     except Exception as e:
         logger.error(f"Error handling SMS response: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/drafts/{message_id}", response_class=HTMLResponse)
+async def get_draft(message_id: str):
+    """
+    Get draft email for review (mobile-friendly HTML)
+    
+    Security: message_id acts as secret token
+    Expiry: Drafts expire 24h after creation (checked via workflow created_at)
+    
+    Args:
+        message_id: Email message ID
+        
+    Returns:
+        HTML page with draft email for review
+    """
+    try:
+        from datetime import datetime, timezone, timedelta
+        
+        # Get workflow from database
+        workflow = db_manager.get_workflow(message_id)
+        
+        if not workflow:
+            return HTMLResponse(
+                content="""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Draft Not Found</title>
+                    <style>
+                        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                               padding: 20px; background: #f5f5f5; }
+                        .container { max-width: 600px; margin: 0 auto; background: white;
+                                    padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+                        h1 { color: #d32f2f; }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <h1>❌ Draft Not Found</h1>
+                        <p>This draft does not exist or has been deleted.</p>
+                    </div>
+                </body>
+                </html>
+                """,
+                status_code=404
+            )
+        
+        # Check if draft has expired (24 hours from creation)
+        expiry_time = workflow.created_at + timedelta(hours=24)
+        if datetime.now(timezone.utc) > expiry_time:
+            return HTMLResponse(
+                content="""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Draft Expired</title>
+                    <style>
+                        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                               padding: 20px; background: #f5f5f5; }
+                        .container { max-width: 600px; margin: 0 auto; background: white;
+                                    padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+                        h1 { color: #f57c00; }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <h1>⏰ Draft Expired</h1>
+                        <p>This draft has expired (24 hour limit).</p>
+                        <p>Please check your email for the latest status.</p>
+                    </div>
+                </body>
+                </html>
+                """,
+                status_code=410
+            )
+        
+        # Generate mobile-friendly HTML
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Email Draft Review</title>
+            <style>
+                body {{
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    margin: 0;
+                    padding: 16px;
+                    background: #f5f5f5;
+                    font-size: 16px;
+                    line-height: 1.5;
+                }}
+                .container {{
+                    max-width: 600px;
+                    margin: 0 auto;
+                    background: white;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                    overflow: hidden;
+                }}
+                .header {{
+                    background: #1976d2;
+                    color: white;
+                    padding: 16px;
+                }}
+                .header h1 {{
+                    margin: 0;
+                    font-size: 20px;
+                    font-weight: 600;
+                }}
+                .section {{
+                    padding: 16px;
+                    border-bottom: 1px solid #e0e0e0;
+                }}
+                .section:last-child {{
+                    border-bottom: none;
+                }}
+                .section-title {{
+                    font-size: 12px;
+                    text-transform: uppercase;
+                    color: #666;
+                    margin: 0 0 8px 0;
+                    font-weight: 600;
+                }}
+                .section-content {{
+                    margin: 0;
+                    color: #333;
+                }}
+                .email-from {{
+                    font-weight: 600;
+                    color: #1976d2;
+                }}
+                .email-subject {{
+                    font-weight: 600;
+                }}
+                .email-body {{
+                    background: #f9f9f9;
+                    padding: 12px;
+                    border-radius: 4px;
+                    border-left: 3px solid #e0e0e0;
+                    white-space: pre-wrap;
+                    word-wrap: break-word;
+                }}
+                .draft-reply {{
+                    background: #e3f2fd;
+                    padding: 12px;
+                    border-radius: 4px;
+                    border-left: 3px solid #1976d2;
+                    white-space: pre-wrap;
+                    word-wrap: break-word;
+                }}
+                .actions {{
+                    background: #fafafa;
+                    padding: 16px;
+                    text-align: center;
+                }}
+                .actions p {{
+                    margin: 0 0 12px 0;
+                    color: #666;
+                    font-size: 14px;
+                }}
+                .action-codes {{
+                    font-family: 'Courier New', monospace;
+                    font-size: 18px;
+                    font-weight: 600;
+                    color: #333;
+                    background: white;
+                    padding: 12px;
+                    border-radius: 4px;
+                    border: 2px solid #e0e0e0;
+                }}
+                .status {{
+                    padding: 16px;
+                    background: #fff3e0;
+                    text-align: center;
+                }}
+                .status-badge {{
+                    display: inline-block;
+                    padding: 6px 12px;
+                    border-radius: 12px;
+                    font-size: 12px;
+                    font-weight: 600;
+                    text-transform: uppercase;
+                }}
+                .status-awaiting {{
+                    background: #ff9800;
+                    color: white;
+                }}
+                .expiry {{
+                    font-size: 12px;
+                    color: #666;
+                    text-align: center;
+                    padding: 8px;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>📧 Email Draft Review</h1>
+                </div>
+                
+                <div class="section">
+                    <p class="section-title">From</p>
+                    <p class="section-content email-from">{workflow.email_from or 'Unknown'}</p>
+                </div>
+                
+                <div class="section">
+                    <p class="section-title">Subject</p>
+                    <p class="section-content email-subject">{workflow.email_subject or 'No Subject'}</p>
+                </div>
+                
+                <div class="section">
+                    <p class="section-title">Original Message</p>
+                    <div class="email-body">{workflow.email_body_preview or 'No preview available'}</div>
+                </div>
+                
+                <div class="section">
+                    <p class="section-title">AI-Generated Draft Reply</p>
+                    <div class="draft-reply">{workflow.ai_reply_text or 'No draft available'}</div>
+                </div>
+                
+                <div class="status">
+                    <span class="status-badge status-awaiting">⏳ {workflow.current_state.replace('_', ' ').title()}</span>
+                </div>
+                
+                <div class="actions">
+                    <p>Reply via SMS with:</p>
+                    <div class="action-codes">
+                        1 = Send<br>
+                        2 = Edit<br>
+                        3 = Ignore
+                    </div>
+                </div>
+                
+                <div class="expiry">
+                    Draft expires: {expiry_time.strftime('%Y-%m-%d %H:%M UTC')}
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        return HTMLResponse(content=html_content)
+        
+    except Exception as e:
+        logger.error(f"Error retrieving draft {message_id}: {e}")
+        return HTMLResponse(
+            content=f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Error</title>
+                <style>
+                    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                           padding: 20px; background: #f5f5f5; }}
+                    .container {{ max-width: 600px; margin: 0 auto; background: white;
+                                padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
+                    h1 {{ color: #d32f2f; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>❌ Error</h1>
+                    <p>An error occurred while retrieving the draft.</p>
+                    <p style="color: #666; font-size: 14px;">{str(e)}</p>
+                </div>
+            </body>
+            </html>
+            """,
+            status_code=500
+        )
 
 
 @app.get("/")

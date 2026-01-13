@@ -203,17 +203,22 @@ class WorkflowManager:
                 WorkflowStateUpdate(current_state="sms_sending")
             )
             
-            # Format SMS message
+            # Format SMS message with URL support for long drafts
             sms_format = os.getenv('SMS_FORMAT', 'condensed')
+            orchestrator_base_url = os.getenv('ORCHESTRATOR_BASE_URL', 'https://sms.jackan.xyz')
+            
             sms_message = format_sms_notification(
                 email_from=workflow.email_from or "Unknown",
                 email_subject=workflow.email_subject or "No subject",
                 email_body_preview=workflow.email_body_preview or "",
                 ai_reply=workflow.ai_reply_text or "",
+                message_id=message_id,
+                orchestrator_base_url=orchestrator_base_url,
                 format_type=sms_format
             )
             
             logger.info(f"Sending SMS notification for {message_id}")
+            logger.debug(f"SMS message length: {len(sms_message)} chars")
             
             # Send SMS
             sms_response = await self.sms.send_sms(self.your_phone_number, sms_message)
