@@ -15,7 +15,6 @@ from typing import Optional
 import logging
 
 from app.database import DatabaseManager, get_database_manager
-from app.email_monitor_client import EmailMonitorClient, get_email_monitor_client
 from app.ai_reply_client import AIReplyClient, get_ai_reply_client
 from app.sms_client import SMSClient, get_sms_client, format_sms_notification
 from app.gmail_client import GmailClient, get_gmail_client
@@ -36,7 +35,6 @@ class WorkflowManager:
     def __init__(
         self,
         db_manager: DatabaseManager,
-        email_monitor: EmailMonitorClient,
         ai_reply: AIReplyClient,
         sms: SMSClient,
         gmail: GmailClient,
@@ -51,7 +49,6 @@ class WorkflowManager:
         
         Args:
             db_manager: Database manager
-            email_monitor: Email Monitor client
             ai_reply: AI Reply Generator client
             sms: SMS Gateway client
             gmail: Gmail SMTP client
@@ -62,7 +59,6 @@ class WorkflowManager:
             max_emails_per_poll: Maximum emails to process per poll cycle
         """
         self.db = db_manager
-        self.email_monitor = email_monitor
         self.ai_reply = ai_reply
         self.sms = sms
         self.gmail = gmail
@@ -75,11 +71,11 @@ class WorkflowManager:
     
     async def process_pending_emails(self):
         """
-        Poll Email Monitor for pending emails and start workflow for each.
+        Query database directly for pending emails and start workflow for each.
         """
         try:
-            logger.info("Polling Email Monitor for pending emails...")
-            pending_emails = await self.email_monitor.get_pending_emails()
+            logger.info("Querying database for pending emails...")
+            pending_emails = self.db.get_pending_emails(hours=24, limit=self.max_emails_per_poll)
             
             if not pending_emails:
                 logger.debug("No pending emails found")
@@ -133,8 +129,8 @@ class WorkflowManager:
             
             self.db.create_workflow(workflow)
             
-            # Update email status in Email Monitor
-            await self.email_monitor.update_email_status(email.message_id, "orchestrating")
+            # Update email status in database
+            self.db.update_email_status(email.message_id, "orchestrating")
             
             # Generate AI reply
             await self.generate_ai_reply(email.message_id)
@@ -327,8 +323,8 @@ class WorkflowManager:
             if not workflow:
                 raise Exception(f"Workflow not found for {message_id}")
             
-            # Get email details
-            email = await self.email_monitor.get_email_details(message_id)
+            # Get email details from database
+            email = self.db.get_email_details(message_id)
             if not email:
                 raise Exception(f"Email details not found for {message_id}")
             
@@ -353,8 +349,8 @@ class WorkflowManager:
                 )
             )
             
-            # Update email status in Email Monitor
-            await self.email_monitor.update_email_status(message_id, "sent")
+            # Update email status in database
+            self.db.update_email_status(message_id, "sent")
             
             logger.info(f"Email reply sent successfully for {message_id}")
             
@@ -390,8 +386,8 @@ class WorkflowManager:
                 WorkflowStateUpdate(current_state="user_ignored")
             )
             
-            # Update email status in Email Monitor
-            await self.email_monitor.update_email_status(message_id, "ignored")
+            # Update email status in database
+            self.db.update_email_status(message_id, "ignored")
             
             # Send confirmation SMS
             await self.sms.send_sms(
@@ -483,8 +479,8 @@ class WorkflowManager:
                     WorkflowStateUpdate(current_state="timeout")
                 )
                 
-                # Update email status
-                await self.email_monitor.update_email_status(workflow.message_id, "timeout")
+                # Update email status in database
+                self.db.update_email_status(workflow.message_id, "timeout")
                 
                 # Optionally send reminder SMS
                 # await self.sms.send_sms(
@@ -504,7 +500,6 @@ def get_workflow_manager() -> WorkflowManager:
         WorkflowManager instance
     """
     db_manager = get_database_manager()
-    email_monitor = get_email_monitor_client()
     ai_reply = get_ai_reply_client()
     sms = get_sms_client()
     gmail = get_gmail_client()
@@ -520,7 +515,6 @@ def get_workflow_manager() -> WorkflowManager:
     
     return WorkflowManager(
         db_manager=db_manager,
-        email_monitor=email_monitor,
         ai_reply=ai_reply,
         sms=sms,
         gmail=gmail,

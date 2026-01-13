@@ -309,8 +309,8 @@ async def timeout_workflow(message_id: str):
             WorkflowStateUpdate(current_state="timeout")
         )
         
-        # Update email status
-        await workflow_manager.email_monitor.update_email_status(message_id, "timeout")
+        # Update email status in database
+        db_manager.update_email_status(message_id, "timeout")
         
         return {"message": "Workflow timed out", "message_id": message_id}
         

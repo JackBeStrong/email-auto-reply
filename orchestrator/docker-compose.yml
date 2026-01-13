@@ -5,7 +5,6 @@ services:
       - "8003:8003"
     environment:
       # Service URLs
-      - EMAIL_MONITOR_URL=${EMAIL_MONITOR_URL:-http://192.168.1.238:8001}
       - AI_REPLY_GENERATOR_URL=${AI_REPLY_GENERATOR_URL:-http://192.168.1.238:8002}
       - SMS_GATEWAY_URL=${SMS_GATEWAY_URL:-http://192.168.1.238:8000}
       

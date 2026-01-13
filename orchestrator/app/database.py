@@ -2,14 +2,15 @@
 Database manager for Orchestrator service
 
 Handles workflow state persistence and audit logging.
+Also queries Email Monitor's processed_emails table directly.
 """
 import os
 from datetime import datetime, timedelta
 from typing import Optional, List
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey, ARRAY, TIMESTAMP
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
-from app.models import WorkflowStateCreate, WorkflowStateUpdate
+from app.models import WorkflowStateCreate, WorkflowStateUpdate, EmailDetail
 
 Base = declarative_base()
 
@@ -62,6 +63,28 @@ class WorkflowAuditLogDB(Base):
     transition_reason = Column(Text)
     error_details = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ProcessedEmailDB(Base):
+    """SQLAlchemy model for Email Monitor's processed_emails table"""
+    __tablename__ = 'processed_emails'
+    
+    id = Column(Integer, primary_key=True)
+    message_id = Column(String(255), unique=True, nullable=False)
+    subject = Column(Text)
+    from_address = Column(String(255), nullable=False)
+    to_addresses = Column(ARRAY(Text))
+    body_text = Column(Text)
+    body_html = Column(Text)
+    received_at = Column(TIMESTAMP(timezone=True), nullable=False)
+    processed_at = Column(TIMESTAMP(timezone=True), nullable=False)
+    status = Column(String(50), nullable=False)
+    reply_draft = Column(Text)
+    error_message = Column(Text)
+    thread_id = Column(String(255))
+    in_reply_to = Column(String(255))
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False)
+    updated_at = Column(TIMESTAMP(timezone=True), nullable=False)
 
 
 class DatabaseManager:
@@ -281,6 +304,103 @@ class DatabaseManager:
                 .filter_by(message_id=message_id)\
                 .order_by(WorkflowAuditLogDB.created_at.asc())\
                 .all()
+    
+    def get_pending_emails(self, hours: int = 24, limit: int = 5) -> List[EmailDetail]:
+        """
+        Query Email Monitor's processed_emails table directly for pending emails.
+        
+        Args:
+            hours: Only return emails from last N hours
+            limit: Maximum number of emails to return
+            
+        Returns:
+            List of pending emails
+        """
+        with self.get_session() as session:
+            cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+            
+            emails = session.query(ProcessedEmailDB)\
+                .filter(
+                    ProcessedEmailDB.status == 'pending',
+                    ProcessedEmailDB.received_at >= cutoff_time
+                )\
+                .order_by(ProcessedEmailDB.received_at.desc())\
+                .limit(limit)\
+                .all()
+            
+            return [
+                EmailDetail(
+                    message_id=email.message_id,
+                    subject=email.subject,
+                    from_address=email.from_address,
+                    to_addresses=email.to_addresses or [],
+                    body_text=email.body_text,
+                    body_html=email.body_html,
+                    in_reply_to=email.in_reply_to,
+                    thread_id=email.thread_id,
+                    received_at=email.received_at.isoformat() if email.received_at else None,
+                    processed_at=email.processed_at.isoformat() if email.processed_at else None,
+                    status=email.status,
+                    reply_draft=email.reply_draft,
+                    error_message=email.error_message
+                )
+                for email in emails
+            ]
+    
+    def get_email_details(self, message_id: str) -> Optional[EmailDetail]:
+        """
+        Get email details from Email Monitor's processed_emails table.
+        
+        Args:
+            message_id: Email message ID
+            
+        Returns:
+            Email details or None if not found
+        """
+        with self.get_session() as session:
+            email = session.query(ProcessedEmailDB).filter_by(message_id=message_id).first()
+            
+            if not email:
+                return None
+            
+            return EmailDetail(
+                message_id=email.message_id,
+                subject=email.subject,
+                from_address=email.from_address,
+                to_addresses=email.to_addresses or [],
+                body_text=email.body_text,
+                body_html=email.body_html,
+                in_reply_to=email.in_reply_to,
+                thread_id=email.thread_id,
+                received_at=email.received_at.isoformat() if email.received_at else None,
+                processed_at=email.processed_at.isoformat() if email.processed_at else None,
+                status=email.status,
+                reply_draft=email.reply_draft,
+                error_message=email.error_message
+            )
+    
+    def update_email_status(self, message_id: str, status: str) -> bool:
+        """
+        Update email status in Email Monitor's processed_emails table.
+        
+        Args:
+            message_id: Email message ID
+            status: New status (e.g., 'orchestrating', 'sent', 'ignored', 'timeout')
+            
+        Returns:
+            True if updated successfully, False if email not found
+        """
+        with self.get_session() as session:
+            email = session.query(ProcessedEmailDB).filter_by(message_id=message_id).first()
+            
+            if not email:
+                return False
+            
+            email.status = status
+            email.updated_at = datetime.utcnow()
+            session.commit()
+            
+            return True
 
 
 def get_database_manager() -> DatabaseManager:

@@ -32,12 +32,14 @@ The Orchestrator is the final integration component (Phase 4) of the Email Auto-
 │  └──────────────┘  └──────────────┘  └──────────────┘     │
 └─────────────────────────────────────────────────────────────┘
          ↓                    ↓                    ↓
-    Email Monitor        SMS Gateway          Gmail SMTP
-   (port 8001)          (port 8000)
+   PostgreSQL DB        SMS Gateway          Gmail SMTP
+  (Direct Query)       (port 8000)
          ↓
    AI Reply Generator
    (port 8002)
 ```
+
+**Note**: The orchestrator queries the shared PostgreSQL database directly instead of calling the Email Monitor HTTP API. This eliminates timeout issues and improves performance.
 
 ## Workflow States
 
@@ -103,7 +105,6 @@ User: "1"
 
 ```bash
 # Service URLs
-EMAIL_MONITOR_URL=http://192.168.1.238:8001
 AI_REPLY_GENERATOR_URL=http://192.168.1.238:8002
 SMS_GATEWAY_URL=http://192.168.1.238:8000
 
@@ -254,8 +255,9 @@ curl http://192.168.1.238:8003/workflow/failed
 
 ### Emails not being processed
 1. Check Email Monitor is running: `curl http://192.168.1.238:8001/health`
-2. Check pending emails: `curl http://192.168.1.238:8001/emails/pending`
-3. Check poll interval (default 2 minutes)
+2. Check database for pending emails: Query `processed_emails` table with status='pending'
+3. Check orchestrator poll interval (default 2 minutes)
+4. Check orchestrator logs for database connection issues
 
 ### Gmail sending fails
 1. Verify EMAIL_ADDRESS and EMAIL_PASSWORD are correct
