@@ -335,8 +335,8 @@ class WorkflowManager:
                 to=email.from_address,
                 subject=email.subject or "No subject",
                 body=workflow.ai_reply_text or "",
-                in_reply_to=email.in_reply_to,
-                references=email.references
+                in_reply_to=email.message_id,
+                references=email.in_reply_to
             )
             
             # Update workflow state
