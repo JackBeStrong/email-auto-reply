@@ -1,0 +1,42 @@
+services:
+  orchestrator:
+    build: .
+    ports:
+      - "8003:8003"
+    environment:
+      # Service URLs
+      - EMAIL_MONITOR_URL=${EMAIL_MONITOR_URL:-http://192.168.1.238:8001}
+      - AI_REPLY_GENERATOR_URL=${AI_REPLY_GENERATOR_URL:-http://192.168.1.238:8002}
+      - SMS_GATEWAY_URL=${SMS_GATEWAY_URL:-http://192.168.1.238:8000}
+      
+      # Gmail SMTP
+      - GMAIL_SMTP_SERVER=${GMAIL_SMTP_SERVER:-smtp.gmail.com}
+      - GMAIL_SMTP_PORT=${GMAIL_SMTP_PORT:-465}
+      - EMAIL_ADDRESS=${EMAIL_ADDRESS}
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD}
+      
+      # SMS Configuration (your phone number to send notifications to)
+      - YOUR_PHONE_NUMBER=${YOUR_PHONE_NUMBER}
+      
+      # Database
+      - DB_HOST=${DB_HOST:-192.168.1.228}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-email_auto_reply}
+      - DB_USER=${DB_USER:-readwrite}
+      - DB_PASSWORD=${DB_PASSWORD}
+      
+      # Workflow Configuration
+      - POLL_INTERVAL=${POLL_INTERVAL:-120}
+      - USER_RESPONSE_TIMEOUT=${USER_RESPONSE_TIMEOUT:-86400}
+      - MAX_RETRY_ATTEMPTS=${MAX_RETRY_ATTEMPTS:-3}
+      - MAX_EDIT_ITERATIONS=${MAX_EDIT_ITERATIONS:-10}
+      - SMS_FORMAT=${SMS_FORMAT:-condensed}
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8003/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
