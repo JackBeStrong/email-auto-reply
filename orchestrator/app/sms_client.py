@@ -44,7 +44,7 @@ class SMSClient:
                 response = await client.post(
                     f"{self.base_url}/sms/send",
                     json={
-                        "phone_number": phone_number,
+                        "to": phone_number,
                         "message": message
                     }
                 )

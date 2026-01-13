@@ -6,9 +6,10 @@ import os
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+from datetime import datetime, timedelta
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 
 from .imap_client import IMAPClient
@@ -213,19 +214,48 @@ async def health_check():
 
 
 @app.get("/emails/pending", response_model=EmailListResponse)
-async def get_pending_emails():
-    """Get all emails with pending status"""
+async def get_pending_emails(
+    hours: Optional[int] = Query(None, description="Only return emails from last N hours"),
+    limit: Optional[int] = Query(None, description="Maximum number of emails to return (newest first)")
+):
+    """
+    Get all emails with pending status.
+    
+    Args:
+        hours: Optional filter to only return emails from last N hours
+        limit: Optional limit on number of results (returns newest first)
+    """
     pending = db_manager.get_pending_emails()
     
+    # Convert to list for filtering/sorting
     emails_list = [
         {
             "message_id": msg_id,
             "processed_at": email.processed_at.isoformat(),
             "status": email.status,
-            "reply_draft": email.reply_draft
+            "reply_draft": email.reply_draft,
+            "received_at": email.received_at.isoformat() if email.received_at else None
         }
         for msg_id, email in pending.items()
     ]
+    
+    # Filter by time if hours parameter provided
+    if hours is not None:
+        cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+        emails_list = [
+            email for email in emails_list
+            if email.get("received_at") and datetime.fromisoformat(email["received_at"]) >= cutoff_time
+        ]
+    
+    # Sort by received_at descending (newest first)
+    emails_list.sort(
+        key=lambda e: e.get("received_at") or "1970-01-01T00:00:00",
+        reverse=True
+    )
+    
+    # Apply limit if provided
+    if limit is not None and limit > 0:
+        emails_list = emails_list[:limit]
     
     return EmailListResponse(
         emails=emails_list,

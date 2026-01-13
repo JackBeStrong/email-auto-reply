@@ -26,20 +26,28 @@ class EmailMonitorClient:
         self.base_url = base_url.rstrip('/')
         self.timeout = timeout
     
-    async def get_pending_emails(self) -> List[EmailDetail]:
+    async def get_pending_emails(self, hours: int = 24, limit: int = 5) -> List[EmailDetail]:
         """
         Get list of pending emails from Email Monitor.
         
+        Args:
+            hours: Only return emails from last N hours (default: 24)
+            limit: Maximum number of emails to return (default: 5)
+        
         Returns:
-            List of pending emails
+            List of pending emails (newest first)
             
         Raises:
             Exception: If request fails
         """
         try:
+            params = {"hours": hours, "limit": limit}
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 # First get list of pending message IDs
-                response = await client.get(f"{self.base_url}/emails/pending")
+                response = await client.get(
+                    f"{self.base_url}/emails/pending",
+                    params=params
+                )
                 response.raise_for_status()
                 
                 data = response.json()

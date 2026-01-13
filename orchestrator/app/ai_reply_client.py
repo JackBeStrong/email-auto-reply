@@ -42,11 +42,11 @@ class AIReplyClient:
             AI reply response or None if generation fails
         """
         try:
-            payload = {"message_id": message_id}
+            payload = {"email_message_id": message_id}
             
             # Add edit instructions if provided
             if edit_instructions:
-                payload["edit_instructions"] = edit_instructions
+                payload["context_instructions"] = edit_instructions
                 logger.info(f"Generating AI reply for {message_id} with edit instructions: {edit_instructions}")
             else:
                 logger.info(f"Generating AI reply for {message_id}")

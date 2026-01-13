@@ -43,7 +43,8 @@ class WorkflowManager:
         your_phone_number: str,
         user_response_timeout: int = 86400,  # 24 hours
         max_edit_iterations: int = 10,
-        max_retry_attempts: int = 3
+        max_retry_attempts: int = 3,
+        max_emails_per_poll: int = 5  # Safety limit
     ):
         """
         Initialize workflow manager.
@@ -58,6 +59,7 @@ class WorkflowManager:
             user_response_timeout: Timeout for user response in seconds
             max_edit_iterations: Maximum number of edit iterations
             max_retry_attempts: Maximum retry attempts for failures
+            max_emails_per_poll: Maximum emails to process per poll cycle
         """
         self.db = db_manager
         self.email_monitor = email_monitor
@@ -68,6 +70,7 @@ class WorkflowManager:
         self.user_response_timeout = user_response_timeout
         self.max_edit_iterations = max_edit_iterations
         self.max_retry_attempts = max_retry_attempts
+        self.max_emails_per_poll = max_emails_per_poll
         self.command_parser = CommandParser()
     
     async def process_pending_emails(self):
@@ -84,14 +87,22 @@ class WorkflowManager:
             
             logger.info(f"Found {len(pending_emails)} pending emails")
             
+            # Safety limit to prevent SMS bombardment
+            processed_count = 0
             for email in pending_emails:
                 # Check if workflow already exists
                 if self.db.workflow_exists(email.message_id):
                     logger.debug(f"Workflow already exists for {email.message_id}")
                     continue
                 
+                # Check if we've hit the limit
+                if processed_count >= self.max_emails_per_poll:
+                    logger.warning(f"Reached max emails per poll limit ({self.max_emails_per_poll}), skipping remaining emails")
+                    break
+                
                 # Start workflow for this email
                 await self.start_workflow(email)
+                processed_count += 1
                 
         except Exception as e:
             logger.error(f"Error processing pending emails: {e}")
@@ -505,6 +516,7 @@ def get_workflow_manager() -> WorkflowManager:
     user_response_timeout = int(os.getenv('USER_RESPONSE_TIMEOUT', '86400'))
     max_edit_iterations = int(os.getenv('MAX_EDIT_ITERATIONS', '10'))
     max_retry_attempts = int(os.getenv('MAX_RETRY_ATTEMPTS', '3'))
+    max_emails_per_poll = int(os.getenv('MAX_EMAILS_PER_POLL', '5'))
     
     return WorkflowManager(
         db_manager=db_manager,
@@ -515,5 +527,6 @@ def get_workflow_manager() -> WorkflowManager:
         your_phone_number=your_phone_number,
         user_response_timeout=user_response_timeout,
         max_edit_iterations=max_edit_iterations,
-        max_retry_attempts=max_retry_attempts
+        max_retry_attempts=max_retry_attempts,
+        max_emails_per_poll=max_emails_per_poll
     )
