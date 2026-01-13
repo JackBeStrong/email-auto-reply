@@ -224,7 +224,7 @@ async def generate_reply(request: GenerateReplyRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error generating reply: {e}")
+        logger.error(f"Error generating reply: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate reply: {str(e)}"
