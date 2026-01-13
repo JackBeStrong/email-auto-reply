@@ -73,15 +73,18 @@ class WorkflowStateResponse(BaseModel):
 class EmailDetail(BaseModel):
     """Email details from Email Monitor"""
     message_id: str
-    subject: Optional[str]
+    subject: Optional[str] = None
     from_address: str
-    to_address: str
-    body_text: Optional[str]
-    body_html: Optional[str]
-    in_reply_to: Optional[str]
-    references: Optional[str]
-    received_at: datetime
+    to_addresses: list  # Email Monitor returns list
+    body_text: Optional[str] = None
+    body_html: Optional[str] = None
+    in_reply_to: Optional[str] = None
+    thread_id: Optional[str] = None
+    received_at: Optional[str] = None  # ISO format string from API
+    processed_at: Optional[str] = None
     status: str
+    reply_draft: Optional[str] = None
+    error_message: Optional[str] = None
 
 
 # AI Reply Models

@@ -108,11 +108,13 @@ class WorkflowManager:
             
             # Create workflow state
             timeout_at = datetime.utcnow() + timedelta(seconds=self.user_response_timeout)
+            # Convert to_addresses list to comma-separated string
+            to_address = ", ".join(email.to_addresses) if email.to_addresses else ""
             workflow = WorkflowStateCreate(
                 message_id=email.message_id,
                 email_subject=email.subject,
                 email_from=email.from_address,
-                email_to=email.to_address,
+                email_to=to_address,
                 email_body_preview=email.body_text[:200] if email.body_text else "",
                 current_state="pending",
                 timeout_at=timeout_at

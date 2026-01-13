@@ -38,11 +38,21 @@ class EmailMonitorClient:
         """
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
+                # First get list of pending message IDs
                 response = await client.get(f"{self.base_url}/emails/pending")
                 response.raise_for_status()
                 
                 data = response.json()
-                emails = [EmailDetail(**email) for email in data.get('emails', [])]
+                pending_list = data.get('emails', [])
+                
+                # Fetch full details for each pending email
+                emails = []
+                for item in pending_list:
+                    message_id = item.get('message_id')
+                    if message_id:
+                        email_detail = await self.get_email_details(message_id)
+                        if email_detail:
+                            emails.append(email_detail)
                 
                 logger.info(f"Fetched {len(emails)} pending emails from Email Monitor")
                 return emails
