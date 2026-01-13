@@ -225,42 +225,42 @@ async def get_pending_emails(
         hours: Optional filter to only return emails from last N hours
         limit: Optional limit on number of results (returns newest first)
     """
-    pending = db_manager.get_pending_emails()
+    from .database import ProcessedEmailDB
     
-    # Convert to list for filtering/sorting
-    emails_list = [
-        {
-            "message_id": msg_id,
-            "processed_at": email.processed_at.isoformat(),
-            "status": email.status,
-            "reply_draft": email.reply_draft,
-            "received_at": email.received_at.isoformat() if email.received_at else None
-        }
-        for msg_id, email in pending.items()
-    ]
-    
-    # Filter by time if hours parameter provided
-    if hours is not None:
-        cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+    with db_manager.get_session() as session:
+        # Build query
+        query = session.query(ProcessedEmailDB).filter_by(status='pending')
+        
+        # Filter by time if hours parameter provided
+        if hours is not None:
+            cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+            query = query.filter(ProcessedEmailDB.received_at >= cutoff_time)
+        
+        # Sort by received_at descending (newest first)
+        query = query.order_by(ProcessedEmailDB.received_at.desc())
+        
+        # Apply limit if provided
+        if limit is not None and limit > 0:
+            query = query.limit(limit)
+        
+        # Execute query
+        emails = query.all()
+        
+        # Convert to response format
         emails_list = [
-            email for email in emails_list
-            if email.get("received_at") and datetime.fromisoformat(email["received_at"]) >= cutoff_time
+            {
+                "message_id": email.message_id,
+                "processed_at": email.processed_at.isoformat(),
+                "status": email.status,
+                "reply_draft": email.reply_draft
+            }
+            for email in emails
         ]
-    
-    # Sort by received_at descending (newest first)
-    emails_list.sort(
-        key=lambda e: e.get("received_at") or "1970-01-01T00:00:00",
-        reverse=True
-    )
-    
-    # Apply limit if provided
-    if limit is not None and limit > 0:
-        emails_list = emails_list[:limit]
-    
-    return EmailListResponse(
-        emails=emails_list,
-        total=len(emails_list)
-    )
+        
+        return EmailListResponse(
+            emails=emails_list,
+            total=len(emails_list)
+        )
 
 
 @app.get("/emails/processed", response_model=EmailListResponse)
