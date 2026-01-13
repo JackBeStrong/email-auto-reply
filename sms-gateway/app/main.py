@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     sms_gateway_password: str = ""
     your_phone_number: str = ""
     sms_gateway_webhook_signing_key: str = ""  # Optional: HMAC signing key from Android app
+    orchestrator_url: str = ""  # URL to forward incoming SMS to orchestrator
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -279,8 +280,23 @@ async def incoming_sms_webhook(
     )
     message_store.append(stored_message)
 
-    # TODO: In Phase 4, this is where we'll trigger the orchestrator
-    # to process the user's response (1/2/3 for approve/edit/ignore)
+    # Forward to orchestrator if configured
+    if settings.orchestrator_url:
+        try:
+            import httpx
+            async with httpx.AsyncClient() as client:
+                orchestrator_webhook_url = f"{settings.orchestrator_url}/orchestrator/sms-response"
+                logger.info(f"Forwarding SMS to orchestrator: {orchestrator_webhook_url}")
+                response = await client.post(
+                    orchestrator_webhook_url,
+                    json=webhook.model_dump(),
+                    timeout=10.0
+                )
+                response.raise_for_status()
+                logger.info(f"Successfully forwarded SMS to orchestrator: {response.status_code}")
+        except Exception as e:
+            logger.error(f"Failed to forward SMS to orchestrator: {e}")
+            # Don't fail the webhook - we've already stored the message
 
     return {"status": "received", "message_id": stored_message.id}
 

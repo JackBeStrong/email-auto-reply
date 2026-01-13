@@ -7,6 +7,7 @@ services:
       - ANDROID_GATEWAY_URL=${ANDROID_GATEWAY_URL:-http://host.docker.internal:8080}
       - YOUR_PHONE_NUMBER=${YOUR_PHONE_NUMBER}
       - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+      - ORCHESTRATOR_URL=${ORCHESTRATOR_URL:-http://192.168.1.238:8003}
     env_file:
       - .env
     restart: unless-stopped

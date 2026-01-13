@@ -52,18 +52,24 @@ class IncomingSMSWebhook(BaseModel):
     
     Example:
     {
+      "deviceId": "device_abc123",
       "event": "sms:received",
+      "id": "webhook_xyz789",
       "payload": {
         "messageId": "msg_12345abcde",
         "message": "Received SMS text",
         "phoneNumber": "+19162255887",
         "simNumber": 1,
         "receivedAt": "2024-06-07T11:41:31.000+07:00"
-      }
+      },
+      "webhookId": "webhook_xyz789"
     }
     """
+    deviceId: str = Field(..., description="Device ID from Android app")
     event: str = Field(..., description="Event type (e.g., sms:received)")
+    id: str = Field(..., description="Webhook event ID")
     payload: WebhookPayload = Field(..., description="SMS message payload")
+    webhookId: str = Field(..., description="Webhook ID")
 
     model_config = ConfigDict(populate_by_name=True)
 
