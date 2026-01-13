@@ -10,7 +10,6 @@ from dotenv import load_dotenv
 
 from fastapi import FastAPI, HTTPException, status
 from fastapi.responses import JSONResponse
-import httpx
 
 # Load environment variables from .env file
 load_dotenv()
@@ -48,7 +47,6 @@ DB_PASSWORD = os.getenv("DB_PASSWORD")
 # Build database URL
 DATABASE_URL = f"postgresql+psycopg://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
-EMAIL_MONITOR_URL = os.getenv("EMAIL_MONITOR_URL", "http://localhost:8001")
 SERVICE_PORT = int(os.getenv("SERVICE_PORT", "8002"))
 SMS_FRIENDLY_MAX_LENGTH = int(os.getenv("SMS_FRIENDLY_MAX_LENGTH", "300"))
 
@@ -141,20 +139,14 @@ async def generate_reply(request: GenerateReplyRequest):
     5. Returns draft details
     """
     try:
-        # Fetch email context from email-monitor service
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{EMAIL_MONITOR_URL}/emails/{request.email_message_id}"
+        # Fetch email context from database
+        email_data = db_manager.get_email(request.email_message_id)
+        
+        if not email_data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Email {request.email_message_id} not found"
             )
-            
-            if response.status_code == 404:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Email {request.email_message_id} not found"
-                )
-            
-            response.raise_for_status()
-            email_data = response.json()
         
         logger.info(f"Generating reply for email {request.email_message_id}")
         
@@ -327,13 +319,14 @@ async def get_draft_preview(draft_id: str):
         )
     
     try:
-        # Fetch email context
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{EMAIL_MONITOR_URL}/emails/{draft['email_message_id']}"
+        # Fetch email context from database
+        email_data = db_manager.get_email(draft['email_message_id'])
+        
+        if not email_data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Email {draft['email_message_id']} not found"
             )
-            response.raise_for_status()
-            email_data = response.json()
         
         return DraftPreview(
             draft_id=draft['draft_id'],

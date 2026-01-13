@@ -39,6 +39,26 @@ class ReplyDraftDB(Base):
     sent_at = Column(DateTime, nullable=True)
 
 
+class ProcessedEmailDB(Base):
+    """SQLAlchemy model for processed_emails table (from Email Monitor)"""
+    __tablename__ = "processed_emails"
+    
+    id = Column(Integer, primary_key=True)
+    message_id = Column(String(255), unique=True, nullable=False, index=True)
+    subject = Column(Text, nullable=True)
+    from_address = Column(String(255), nullable=False)
+    to_addresses = Column(Text, nullable=False)  # JSON array stored as text
+    body_text = Column(Text, nullable=True)
+    body_html = Column(Text, nullable=True)
+    in_reply_to = Column(String(255), nullable=True)
+    thread_id = Column(String(255), nullable=True, index=True)
+    received_at = Column(DateTime, nullable=False, index=True)
+    processed_at = Column(DateTime, nullable=False)
+    status = Column(String(50), default='pending', nullable=False, index=True)
+    reply_draft = Column(Text, nullable=True)
+    error_message = Column(Text, nullable=True)
+
+
 # ============================================================================
 # Database Manager
 # ============================================================================
@@ -288,4 +308,40 @@ class DatabaseManager:
                 }
                 for draft in drafts
             ]
+    
+    # ========================================================================
+    # Email Operations (Query Email Monitor's table)
+    # ========================================================================
+    
+    def get_email(self, message_id: str) -> Optional[Dict]:
+        """
+        Get email details from processed_emails table
+        
+        Args:
+            message_id: Email message ID
+            
+        Returns:
+            Email details dict or None if not found
+        """
+        with self.get_session() as session:
+            email = session.query(ProcessedEmailDB).filter_by(message_id=message_id).first()
+            
+            if not email:
+                return None
+            
+            return {
+                'message_id': email.message_id,
+                'subject': email.subject,
+                'from_address': email.from_address,
+                'to_addresses': email.to_addresses,
+                'body_text': email.body_text,
+                'body_html': email.body_html,
+                'in_reply_to': email.in_reply_to,
+                'thread_id': email.thread_id,
+                'received_at': email.received_at.isoformat() if email.received_at else None,
+                'processed_at': email.processed_at.isoformat() if email.processed_at else None,
+                'status': email.status,
+                'reply_draft': email.reply_draft,
+                'error_message': email.error_message
+            }
 

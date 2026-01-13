@@ -19,12 +19,14 @@ This service generates contextual email reply drafts using Anthropic's Claude AP
 ## Architecture
 
 ```
-Email Monitor → AI Reply Generator → Claude API
-                       ↓
-                  PostgreSQL
-                       ↓
-                  SMS Gateway (Phase 4)
+PostgreSQL (processed_emails) → AI Reply Generator → Claude API
+                                        ↓
+                                   PostgreSQL (reply_drafts)
+                                        ↓
+                                   SMS Gateway (Phase 4)
 ```
+
+**Note**: The AI Reply Generator queries the shared PostgreSQL database directly instead of calling the Email Monitor HTTP API. This eliminates timeout issues and improves performance.
 
 ## API Endpoints
 
@@ -75,9 +77,6 @@ ANTHROPIC_API_KEY=your_api_key_here
 
 # Database
 DATABASE_URL=postgresql://email_auto_reply:password@192.168.1.228:5432/email_auto_reply
-
-# Email Monitor Service
-EMAIL_MONITOR_URL=http://localhost:8001
 
 # Service Configuration
 SERVICE_PORT=8002
@@ -178,7 +177,7 @@ When integrated with the orchestrator (Phase 4), users can respond via SMS:
 
 ## Reply Generation Flow
 
-1. **Fetch Email Context**: Retrieve email details from email-monitor service
+1. **Fetch Email Context**: Query email details from `processed_emails` table in database
 2. **Generate Reply**: Call Claude API with context-aware prompt
 3. **Validate**: Check for placeholders, profanity, length constraints
 4. **Format**: Determine if SMS-friendly or needs summary
@@ -203,9 +202,9 @@ The service logs token usage for all API calls.
 
 ## Integration
 
-### With Email Monitor
+### With Orchestrator
 ```python
-# Email Monitor calls AI Reply Generator after filtering
+# Orchestrator calls AI Reply Generator to generate drafts
 response = await client.post(
     "http://localhost:8002/generate-reply",
     json={"email_message_id": msg_id}
@@ -251,9 +250,9 @@ Service runs on:
 - Check database credentials
 
 ### Email Context Not Found
-- Verify email-monitor service is running
-- Check `EMAIL_MONITOR_URL` configuration
-- Ensure email exists in email-monitor database
+- Verify email exists in `processed_emails` table
+- Check database connection
+- Ensure Email Monitor has processed the email
 
 ## License
 
