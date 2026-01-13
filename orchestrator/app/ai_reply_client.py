@@ -65,7 +65,7 @@ class AIReplyClient:
                 data = response.json()
                 
                 ai_response = AIReplyResponse(**data)
-                logger.info(f"AI reply generated for {message_id}: {ai_response.reply_length} chars")
+                logger.info(f"AI reply generated for {message_id}: {ai_response.length} chars")
                 
                 return ai_response
                 
